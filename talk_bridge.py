@@ -1,4 +1,5 @@
 import threading
+import re
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 
@@ -10,8 +11,119 @@ recognizer = sr.Recognizer()
 translator = Translator()
 
 
+VI_UNITS = [
+    "không",
+    "một",
+    "hai",
+    "ba",
+    "bốn",
+    "năm",
+    "sáu",
+    "bảy",
+    "tám",
+    "chín",
+]
+
+ZH_DIGITS = {
+    "0": "\u96f6",  # 零
+    "1": "\u4e00",  # 一
+    "2": "\u4e8c",  # 二
+    "3": "\u4e09",  # 三
+    "4": "\u56db",  # 四
+    "5": "\u4e94",  # 五
+    "6": "\u516d",  # 六
+    "7": "\u4e03",  # 七
+    "8": "\u516b",  # 八
+    "9": "\u4e5d",  # 九
+}
+
+
+def vn_number_to_words(n):
+    if n < 0:
+        return str(n)
+
+    if n < 10:
+        return VI_UNITS[n]
+
+    if n == 10:
+        return "mười"
+
+    if n < 20:
+        unit = n - 10
+        if unit == 0:
+            return "mười"
+        if unit == 5:
+            return "mười lăm"
+        if unit == 1:
+            return "mười một"
+        return "muoi " + VI_UNITS[unit]
+
+    if n < 100:
+        tens, unit = divmod(n, 10)
+        tens_part = VI_UNITS[tens] + " mười"
+        if unit == 0:
+            return tens_part
+        if unit == 1:
+            unit_word = "một"
+        elif unit == 5:
+            unit_word = "lăm"
+        else:
+            unit_word = VI_UNITS[unit]
+        return tens_part + " " + unit_word
+
+    if n < 1000:
+        hundreds, remainder = divmod(n, 100)
+        result = VI_UNITS[hundreds] + " trăm"
+        if remainder == 0:
+            return result
+        if remainder < 10:
+            return result + " le " + vn_number_to_words(remainder)
+        return result + " " + vn_number_to_words(remainder)
+
+    if n < 1000000:
+        thousands, remainder = divmod(n, 1000)
+        result = vn_number_to_words(thousands) + " nghìn"
+        if remainder == 0:
+            return result
+        return result + " " + vn_number_to_words(remainder)
+
+    return str(n)
+
+
+def number_to_words_for_lang(digits, lang):
+    if not digits:
+        return digits
+
+    if lang.startswith("vi"):
+        try:
+            n = int(digits)
+        except ValueError:
+            return digits
+        return vn_number_to_words(n)
+
+    if lang.startswith("zh"):
+        return "".join(ZH_DIGITS.get(ch, ch) for ch in digits)
+
+    return digits
+
+
+def prepare_number_text(text, lang):
+    def replace_plain(match):
+        digits = match.group(0)
+        return number_to_words_for_lang(digits, lang)
+
+    def replace_annotated(match):
+        digits = match.group(0)
+        words = number_to_words_for_lang(digits, lang)
+        return f"{words} ({digits})"
+
+    plain = re.sub(r"\d+", replace_plain, text)
+    annotated = re.sub(r"\d+", replace_annotated, text)
+    return plain, annotated
+
+
 class TalkBridgeApp(tk.Tk):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
         self.title("Talk Bridge")
         self.geometry("1500x600")
@@ -21,20 +133,20 @@ class TalkBridgeApp(tk.Tk):
         self.status_var = tk.StringVar()
         self.status_var.set("Click a button and speak near the microphone.")
 
-        self.viet_button: tk.Button
-        self.chinese_button: tk.Button
+        self.viet_button = None
+        self.chinese_button = None
 
-        self.viet_original: scrolledtext.ScrolledText
-        self.viet_to_chinese: scrolledtext.ScrolledText
-        self.viet_to_english: scrolledtext.ScrolledText
+        self.viet_original = None
+        self.viet_to_chinese = None
+        self.viet_to_english = None
 
-        self.chinese_original: scrolledtext.ScrolledText
-        self.chinese_to_viet: scrolledtext.ScrolledText
-        self.chinese_to_english: scrolledtext.ScrolledText
+        self.chinese_original = None
+        self.chinese_to_viet = None
+        self.chinese_to_english = None
 
         self._build_ui()
 
-    def _build_ui(self) -> None:
+    def _build_ui(self):
         status_label = tk.Label(self, textvariable=self.status_var, fg="blue")
         status_label.pack(anchor="w", pady=(0, 10))
 
@@ -46,20 +158,14 @@ class TalkBridgeApp(tk.Tk):
 
         self.viet_original = scrolledtext.ScrolledText(viet_frame, height=5, wrap="word")
         self.viet_original.pack(fill="both", expand=False, padx=5, pady=(5, 0))
-        self.viet_original.insert("end", "Original Vietnamese...\n")
-        self.viet_original.config(state="disabled")
 
         self.viet_to_chinese = scrolledtext.ScrolledText(viet_frame, height=5, wrap="word")
         self.viet_to_chinese.pack(fill="both", expand=False, padx=5, pady=(5, 0))
-        self.viet_to_chinese.insert("end", "Vietnamese → Chinese...\n")
-        self.viet_to_chinese.config(state="disabled")
 
         self.viet_to_english = scrolledtext.ScrolledText(viet_frame, height=5, wrap="word")
         self.viet_to_english.pack(fill="both", expand=True, padx=5, pady=(5, 5))
-        self.viet_to_english.insert("end", "Vietnamese → English...\n")
-        self.viet_to_english.config(state="disabled")
 
-        self.viet_button = tk.Button(viet_frame, text="🎤 Speak Vietnamese", command=self.start_vietnamese)
+        self.viet_button = tk.Button(viet_frame, text="Speak Vietnamese", command=self.start_vietnamese)
         self.viet_button.pack(pady=(0, 5))
 
         chinese_frame = tk.LabelFrame(container, text="Chinese speaker")
@@ -67,43 +173,31 @@ class TalkBridgeApp(tk.Tk):
 
         self.chinese_original = scrolledtext.ScrolledText(chinese_frame, height=5, wrap="word")
         self.chinese_original.pack(fill="both", expand=False, padx=5, pady=(5, 0))
-        self.chinese_original.insert("end", "Original Chinese...\n")
-        self.chinese_original.config(state="disabled")
 
         self.chinese_to_viet = scrolledtext.ScrolledText(chinese_frame, height=5, wrap="word")
         self.chinese_to_viet.pack(fill="both", expand=False, padx=5, pady=(5, 0))
-        self.chinese_to_viet.insert("end", "Chinese → Vietnamese...\n")
-        self.chinese_to_viet.config(state="disabled")
 
         self.chinese_to_english = scrolledtext.ScrolledText(chinese_frame, height=5, wrap="word")
         self.chinese_to_english.pack(fill="both", expand=True, padx=5, pady=(5, 5))
-        self.chinese_to_english.insert("end", "Chinese → English...\n")
-        self.chinese_to_english.config(state="disabled")
 
-        self.chinese_button = tk.Button(chinese_frame, text="🎤 Speak Chinese", command=self.start_chinese)
+        self.chinese_button = tk.Button(chinese_frame, text="Speak Chinese", command=self.start_chinese)
         self.chinese_button.pack(pady=(0, 5))
 
-        self.clear_button = tk.Button(self, text="Clear All", command=self._clear_all)
-        self.clear_button.pack(pady=(5, 0))
+        clear_button = tk.Button(self, text="Clear All", command=self._clear_all)
+        clear_button.pack(pady=(5, 0))
 
-    def _clear_all(self) -> None:
-        self.viet_original.delete("2.0", "end")
-        self.viet_to_chinese.delete("2.0", "end")
-        self.viet_to_english.delete("2.0", "end")
-        self.chinese_original.delete("2.0", "end")
-        self.chinese_to_viet.delete("2.0", "end")
-        self.chinese_to_english.delete("2.0", "end")
-        self.viet_original.insert("end", "\n")
-        self.viet_to_chinese.insert("end", "\n")
-        self.viet_to_english.insert("end", "\n")
-        self.chinese_original.insert("end", "\n")
-        self.chinese_to_viet.insert("end", "\n")
-        self.chinese_to_english.insert("end", "\n")
+    def _clear_all(self):
+        for widget in (
+            self.viet_original,
+            self.viet_to_chinese,
+            self.viet_to_english,
+            self.chinese_original,
+            self.chinese_to_viet,
+            self.chinese_to_english,
+        ):
+            widget.delete("1.0", "end")
 
-    def start_vietnamese(self) -> None:
-        self.viet_original.config(state="normal")
-        self.viet_to_chinese.config(state="normal")
-        self.viet_to_english.config(state="normal")
+    def start_vietnamese(self):
         self._start_recording(
             recognizer_language="vi-VN",
             source_language="vi",
@@ -114,10 +208,7 @@ class TalkBridgeApp(tk.Tk):
             label="Vietnamese",
         )
 
-    def start_chinese(self) -> None:
-        self.chinese_original.config(state="normal")
-        self.chinese_to_viet.config(state="normal")
-        self.chinese_to_english.config(state="normal")
+    def start_chinese(self):
         self._start_recording(
             recognizer_language="zh-CN",
             source_language="zh-cn",
@@ -130,14 +221,14 @@ class TalkBridgeApp(tk.Tk):
 
     def _start_recording(
         self,
-        recognizer_language: str,
-        source_language: str,
-        other_language: str,
-        original_widget: scrolledtext.ScrolledText,
-        other_widget: scrolledtext.ScrolledText,
-        english_widget: scrolledtext.ScrolledText,
-        label: str,
-    ) -> None:
+        recognizer_language,
+        source_language,
+        other_language,
+        original_widget,
+        other_widget,
+        english_widget,
+        label,
+    ):
         self._disable_buttons()
         thread = threading.Thread(
             target=self._record_and_translate,
@@ -156,14 +247,14 @@ class TalkBridgeApp(tk.Tk):
 
     def _record_and_translate(
         self,
-        recognizer_language: str,
-        source_language: str,
-        other_language: str,
-        original_widget: scrolledtext.ScrolledText,
-        other_widget: scrolledtext.ScrolledText,
-        english_widget: scrolledtext.ScrolledText,
-        label: str,
-    ) -> None:
+        recognizer_language,
+        source_language,
+        other_language,
+        original_widget,
+        other_widget,
+        english_widget,
+        label,
+    ):
         try:
             self._set_status(f"Listening for {label} speech...")
             try:
@@ -189,12 +280,13 @@ class TalkBridgeApp(tk.Tk):
                 self._show_error("Speech recognition error", str(exc))
                 return
 
-            self._append_text(original_widget, text)
+            plain_text, display_text = prepare_number_text(text, source_language)
+            self._append_text(original_widget, display_text)
 
             self._set_status("Translating...")
             try:
-                translated_other = translator.translate(text, src=source_language, dest=other_language).text
-                translated_english = translator.translate(text, src=source_language, dest="en").text
+                translated_other = translator.translate(plain_text, src=source_language, dest=other_language).text
+                translated_english = translator.translate(plain_text, src=source_language, dest="en").text
             except Exception as exc:
                 self._set_status("Translation failed.")
                 self._show_error("Translation error", str(exc))
@@ -207,41 +299,41 @@ class TalkBridgeApp(tk.Tk):
         finally:
             self._enable_buttons()
 
-    def _set_status(self, message: str) -> None:
-        def update() -> None:
+    def _set_status(self, message):
+        def update():
             self.status_var.set(message)
 
         self.after(0, update)
 
-    def _append_text(self, widget: scrolledtext.ScrolledText, text: str) -> None:
-        def update() -> None:
+    def _append_text(self, widget, text):
+        def update():
             widget.insert("end", text + "\n")
             widget.see("end")
 
         self.after(0, update)
 
-    def _disable_buttons(self) -> None:
-        def update() -> None:
+    def _disable_buttons(self):
+        def update():
             self.viet_button.configure(state="disabled")
             self.chinese_button.configure(state="disabled")
 
         self.after(0, update)
 
-    def _enable_buttons(self) -> None:
-        def update() -> None:
+    def _enable_buttons(self):
+        def update():
             self.viet_button.configure(state="normal")
             self.chinese_button.configure(state="normal")
 
         self.after(0, update)
 
-    def _show_error(self, title: str, message: str) -> None:
-        def show() -> None:
+    def _show_error(self, title, message):
+        def show():
             messagebox.showerror(title, message)
 
         self.after(0, show)
 
 
-def main() -> None:
+def main():
     app = TalkBridgeApp()
     app.mainloop()
 
