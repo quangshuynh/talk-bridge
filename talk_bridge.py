@@ -13,8 +13,8 @@ translator = Translator()
 class TalkBridgeApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Vietnamese–Chinese Talk Bridge")
-        self.geometry("900x600")
+        self.title("Talk Bridge")
+        self.geometry("1500x600")
         self.minsize(800, 500)
         self.configure(padx=10, pady=10)
 
@@ -47,14 +47,17 @@ class TalkBridgeApp(tk.Tk):
         self.viet_original = scrolledtext.ScrolledText(viet_frame, height=5, wrap="word")
         self.viet_original.pack(fill="both", expand=False, padx=5, pady=(5, 0))
         self.viet_original.insert("end", "Original Vietnamese...\n")
+        self.viet_original.config(state="disabled")
 
         self.viet_to_chinese = scrolledtext.ScrolledText(viet_frame, height=5, wrap="word")
         self.viet_to_chinese.pack(fill="both", expand=False, padx=5, pady=(5, 0))
         self.viet_to_chinese.insert("end", "Vietnamese → Chinese...\n")
+        self.viet_to_chinese.config(state="disabled")
 
         self.viet_to_english = scrolledtext.ScrolledText(viet_frame, height=5, wrap="word")
         self.viet_to_english.pack(fill="both", expand=True, padx=5, pady=(5, 5))
         self.viet_to_english.insert("end", "Vietnamese → English...\n")
+        self.viet_to_english.config(state="disabled")
 
         self.viet_button = tk.Button(viet_frame, text="🎤 Speak Vietnamese", command=self.start_vietnamese)
         self.viet_button.pack(pady=(0, 5))
@@ -65,19 +68,42 @@ class TalkBridgeApp(tk.Tk):
         self.chinese_original = scrolledtext.ScrolledText(chinese_frame, height=5, wrap="word")
         self.chinese_original.pack(fill="both", expand=False, padx=5, pady=(5, 0))
         self.chinese_original.insert("end", "Original Chinese...\n")
+        self.chinese_original.config(state="disabled")
 
         self.chinese_to_viet = scrolledtext.ScrolledText(chinese_frame, height=5, wrap="word")
         self.chinese_to_viet.pack(fill="both", expand=False, padx=5, pady=(5, 0))
         self.chinese_to_viet.insert("end", "Chinese → Vietnamese...\n")
+        self.chinese_to_viet.config(state="disabled")
 
         self.chinese_to_english = scrolledtext.ScrolledText(chinese_frame, height=5, wrap="word")
         self.chinese_to_english.pack(fill="both", expand=True, padx=5, pady=(5, 5))
         self.chinese_to_english.insert("end", "Chinese → English...\n")
+        self.chinese_to_english.config(state="disabled")
 
         self.chinese_button = tk.Button(chinese_frame, text="🎤 Speak Chinese", command=self.start_chinese)
         self.chinese_button.pack(pady=(0, 5))
 
+        self.clear_button = tk.Button(self, text="Clear All", command=self._clear_all)
+        self.clear_button.pack(pady=(5, 0))
+
+    def _clear_all(self) -> None:
+        self.viet_original.delete("2.0", "end")
+        self.viet_to_chinese.delete("2.0", "end")
+        self.viet_to_english.delete("2.0", "end")
+        self.chinese_original.delete("2.0", "end")
+        self.chinese_to_viet.delete("2.0", "end")
+        self.chinese_to_english.delete("2.0", "end")
+        self.viet_original.insert("end", "\n")
+        self.viet_to_chinese.insert("end", "\n")
+        self.viet_to_english.insert("end", "\n")
+        self.chinese_original.insert("end", "\n")
+        self.chinese_to_viet.insert("end", "\n")
+        self.chinese_to_english.insert("end", "\n")
+
     def start_vietnamese(self) -> None:
+        self.viet_original.config(state="normal")
+        self.viet_to_chinese.config(state="normal")
+        self.viet_to_english.config(state="normal")
         self._start_recording(
             recognizer_language="vi-VN",
             source_language="vi",
@@ -89,6 +115,9 @@ class TalkBridgeApp(tk.Tk):
         )
 
     def start_chinese(self) -> None:
+        self.chinese_original.config(state="normal")
+        self.chinese_to_viet.config(state="normal")
+        self.chinese_to_english.config(state="normal")
         self._start_recording(
             recognizer_language="zh-CN",
             source_language="zh-cn",
