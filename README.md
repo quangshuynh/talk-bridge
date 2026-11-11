@@ -129,6 +129,23 @@ For example, a recognized number may be displayed in a form similar to:
 ... number words ... (123)
 ```
 
+For example, `21` becomes `hai mươi mốt (21)` in Vietnamese and `2026`
+becomes `二零二六 (2026)` in Chinese.
+
+Vietnamese words go up to `tỷ`, so numbers of a trillion or more are
+left as digits. Each run of digits is read on its own, so `3,000` and
+`1.5` are read as two numbers.
+
+## Running the Tests
+
+The number handling lives in `number_text.py` and has tests that run
+offline, without a microphone, the GUI or any online service:
+
+``` bash
+pip install pytest
+python -m pytest
+```
+
 ## Error Handling
 
 Talk Bridge reports common problems through its status area or an error
@@ -147,6 +164,9 @@ A minimal project can look like this:
 ``` text
 talk-bridge/
 ├── talk_bridge.py
+├── number_text.py
+├── tests/
+│   └── test_number_text.py
 └── README.md
 ```
 
